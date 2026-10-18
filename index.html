@@ -1,0 +1,798 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>台股持倉風險評估器｜黑天鵝壓力測試</title>
+<style>
+:root{
+  --bg:#0d1218; --card:#151c26; --card2:#1b2433; --line:#2a3547;
+  --text:#e8edf4; --muted:#8e9db3; --accent:#4da3ff; --gold:#f2b84b;
+  --safe:#2fbf8f; --warn:#f2b84b; --call:#ff8a3d; --liq:#ff4d5e;
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans TC","PingFang TC","Microsoft JhengHei",sans-serif;line-height:1.55;font-size:15px}
+header{padding:28px 20px 8px;max-width:1280px;margin:0 auto}
+h1{margin:0 0 6px;font-size:26px;letter-spacing:.5px}
+h1 span{color:var(--accent)}
+.sub{color:var(--muted);margin:0;max-width:860px}
+.wrap{max-width:1280px;margin:0 auto;padding:16px 20px 60px;display:grid;grid-template-columns:420px 1fr;gap:18px;align-items:start}
+@media(max-width:960px){.wrap{grid-template-columns:1fr}}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px 18px;margin-bottom:16px}
+.card h2{margin:0 0 12px;font-size:16px;display:flex;align-items:center;gap:8px}
+.card h3{margin:14px 0 8px;font-size:14px;color:var(--muted);font-weight:600}
+.left{position:sticky;top:12px;max-height:calc(100vh - 24px);overflow-y:auto;padding-right:4px}
+@media(max-width:960px){.left{position:static;max-height:none;overflow:visible;padding:0}}
+
+.presets{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+button{font:inherit;cursor:pointer;border:1px solid var(--line);background:var(--card2);color:var(--text);padding:8px 10px;border-radius:9px;transition:.15s}
+button:hover{border-color:var(--accent);background:#22304a}
+button.primary{background:var(--accent);color:#06121f;border-color:var(--accent);font-weight:600}
+button.small{padding:5px 9px;font-size:13px}
+
+.field{margin-bottom:13px}
+.field label{display:flex;justify-content:space-between;font-size:14px;margin-bottom:4px;gap:8px}
+.field label .pctTag{color:var(--muted);font-size:12.5px;text-align:right}
+.row{display:flex;align-items:center;gap:10px}
+input[type=range]{flex:1;accent-color:var(--accent);min-width:0}
+input[type=number],select{background:#0f1520;border:1px solid var(--line);color:var(--text);padding:6px 8px;border-radius:8px;font:inherit}
+input[type=number]{width:92px;text-align:right}
+select{width:100%}
+input:focus,select:focus{outline:2px solid var(--accent);border-color:transparent}
+.unit{color:var(--muted);font-size:13px;min-width:22px}
+.hint{color:var(--muted);font-size:12.5px;margin-top:2px}
+.box{background:var(--card2);border-radius:10px;padding:10px 12px;margin-bottom:10px}
+.box .t{font-weight:600;font-size:14px;margin-bottom:6px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.grid2 .row{gap:6px}
+.mini{font-size:12px;color:var(--muted);margin-bottom:2px}
+.calc{font-size:13px;color:#b9c6da;margin-top:8px;background:#121a27;border-radius:8px;padding:6px 10px}
+.chkrow{display:flex;flex-wrap:wrap;gap:6px 16px;font-size:14px;margin-top:4px}
+.chkrow label{display:flex;gap:6px;align-items:center;cursor:pointer}
+.toggle{display:flex;gap:8px;align-items:flex-start;margin:8px 0;font-size:14px}
+.toggle input,.chkrow input{accent-color:var(--accent)}
+.toggle input{margin-top:4px}
+details summary{cursor:pointer;color:var(--accent);font-size:14px;margin:6px 0}
+.err{background:#3a1a22;border:1px solid var(--liq);color:#ffc9cf;border-radius:10px;padding:10px 12px;margin-bottom:14px;display:none}
+.est{display:grid;grid-template-columns:1fr 1fr;gap:6px 10px;margin:6px 0}
+.est .mini{margin:0}
+.estres{margin:8px 0;font-weight:600;color:var(--gold)}
+
+.top{display:grid;grid-template-columns:170px 1fr;gap:18px;align-items:center}
+@media(max-width:560px){.top{grid-template-columns:1fr;justify-items:center;text-align:center}}
+.ring{--p:0;--c:var(--safe);width:160px;height:160px;border-radius:50%;background:conic-gradient(var(--c) calc(var(--p)*1%),#243044 0);display:grid;place-items:center;position:relative}
+.ring::after{content:"";position:absolute;inset:14px;border-radius:50%;background:var(--card)}
+.ring .in{position:relative;z-index:1;text-align:center}
+.ring .num{font-size:38px;font-weight:700;line-height:1}
+.ring .lab{font-size:12px;color:var(--muted)}
+.grade{font-size:22px;font-weight:700;margin-bottom:4px}
+.verdict{color:#c9d3e2}
+.metrics{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:16px}
+@media(max-width:620px){.metrics{grid-template-columns:repeat(2,1fr)}}
+.metric{background:var(--card2);border-radius:10px;padding:10px 12px}
+.metric .k{font-size:12.5px;color:var(--muted)}
+.metric .v{font-size:19px;font-weight:700;margin-top:2px}
+.metric .d{font-size:12px;color:var(--muted);margin-top:2px}
+
+.bar{display:flex;height:30px;border-radius:8px;overflow:hidden;background:#243044;font-size:12px}
+.bar div{display:grid;place-items:center;color:#06121f;font-weight:600;white-space:nowrap;overflow:hidden;transition:width .25s}
+.legend{display:flex;flex-wrap:wrap;gap:6px 14px;margin-top:8px;font-size:13px;color:var(--muted)}
+.dot{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:5px}
+
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0}
+.shockbox{background:var(--card2);border-radius:12px;padding:14px;margin-top:8px}
+.shockbox .head{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px}
+.status{display:inline-block;padding:3px 10px;border-radius:99px;font-weight:700;font-size:13px}
+.st-safe{background:rgba(47,191,143,.15);color:var(--safe)}
+.st-warn{background:rgba(242,184,75,.15);color:var(--warn)}
+.st-call{background:rgba(255,138,61,.16);color:var(--call)}
+.st-liq{background:rgba(255,77,94,.16);color:var(--liq)}
+.kv{display:grid;grid-template-columns:1fr 1fr;gap:6px 18px;margin-top:10px;font-size:14px}
+@media(max-width:560px){.kv{grid-template-columns:1fr}}
+.kv div{display:flex;justify-content:space-between;border-bottom:1px dashed var(--line);padding:3px 0;gap:10px}
+.kv span:first-child{color:var(--muted)}
+canvas{width:100%;height:300px;display:block;background:#0f1520;border-radius:10px;border:1px solid var(--line)}
+.cap{font-size:12.5px;color:var(--muted);margin-top:6px}
+table{width:100%;border-collapse:collapse;font-size:13.5px}
+th,td{padding:8px 8px;border-bottom:1px solid var(--line);text-align:right;white-space:nowrap}
+th:first-child,td:first-child{text-align:left}
+th{color:var(--muted);font-weight:600}
+tr.cur td{background:rgba(77,163,255,.08)}
+.tbl{overflow-x:auto}
+.neg{color:#ff7b88}.pos{color:#5fd7a6}
+
+.bk{display:grid;grid-template-columns:130px 1fr 44px;gap:10px;align-items:center;margin-bottom:10px}
+.bk .n{font-size:14px}.bk .n small{color:var(--muted);display:block;font-size:11.5px}
+.track{height:10px;background:#243044;border-radius:6px;overflow:hidden}
+.track i{display:block;height:100%;border-radius:6px;transition:width .25s}
+.bk .s{text-align:right;font-weight:700}
+.bkd{grid-column:2/4;font-size:12.5px;color:var(--muted);margin-top:-6px}
+@media(max-width:560px){.bk{grid-template-columns:90px 1fr 36px}}
+
+.sug{list-style:none;padding:0;margin:0}
+.sug li{padding:10px 12px;border-radius:10px;margin-bottom:8px;background:var(--card2);border-left:4px solid var(--accent)}
+.sug li.bad{border-left-color:var(--liq)}
+.sug li.mid{border-left-color:var(--warn)}
+.sug li.ok{border-left-color:var(--safe)}
+.foot{color:var(--muted);font-size:12.5px;margin-top:8px}
+.disc{background:#1d1a10;border:1px solid #5a4a1c;color:#e9d9a6;border-radius:10px;padding:10px 12px;font-size:13px;margin-top:12px;max-width:900px}
+.toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%);background:var(--accent);color:#06121f;padding:9px 18px;border-radius:99px;font-weight:600;opacity:0;pointer-events:none;transition:.25s}
+.toast.show{opacity:1}
+</style>
+</head>
+<body>
+<header>
+  <h1>台股<span>持倉風險評估器</span></h1>
+  <p class="sub">半導體股技術性熊市來襲時，你的倉位撐得住嗎？輸入科技股（含融資）、指數型 ETF、其他持倉、金融股、現金，以及指數型避險部位（期貨、權證／選擇權），立刻看到追繳點、斷頭風險、各種下跌情境的淨值變化，以及機構式的防禦建議。</p>
+  <div class="disc">⚠️ 本工具為教學用途的簡化模型，不構成任何投資建議。實際維持率、補繳規則、避險效果請以券商與期交所公告為準。</div>
+</header>
+
+<div class="wrap">
+  <!-- 左：輸入 -->
+  <div class="left">
+    <div class="card">
+      <h2>⚡ 快速範例</h2>
+      <div class="presets" id="presets"></div>
+    </div>
+
+    <div class="card">
+      <h2>📥 我的持倉（單位：新台幣 萬元）</h2>
+      <div class="err" id="err"></div>
+      <div id="posFields"></div>
+      <div class="field">
+        <div style="font-size:14px">融資擔保品包含哪些？</div>
+        <div class="chkrow">
+          <label><input type="checkbox" id="colTech"> 科技股</label>
+          <label><input type="checkbox" id="colEtf"> 指數型 ETF</label>
+          <label><input type="checkbox" id="colOth"> 其他持倉</label>
+        </div>
+        <div class="hint">融資買進的標的才算擔保品；維持率＝擔保品市值 ÷ 融資借款</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>🛡️ 避險部位（空單，標的限指數型）</h2>
+      <div class="box">
+        <div class="t">期貨空單</div>
+        <select id="futMode" aria-label="期貨商品">
+          <option value="elec">小型電子期貨（每點 500 元）</option>
+          <option value="micro">微型台指期貨（每點 10 元）</option>
+          <option value="direct">直接填名目金額（加權指數型）</option>
+        </select>
+        <div id="futContracts" class="grid2" style="margin-top:8px">
+          <div><div class="mini">空單口數</div><div class="row"><input type="number" id="n_futN" min="0" step="1"></div></div>
+          <div><div class="mini" id="pxLabel">指數點位</div><div class="row"><input type="number" id="n_elecPx" min="1" step="1"><input type="number" id="n_txPx" min="1" step="1"></div></div>
+        </div>
+        <div id="futDirectRow" style="margin-top:8px">
+          <div class="mini">期貨空單名目金額（萬）</div><div class="row"><input type="number" id="n_futDirect" min="0" step="10"></div>
+        </div>
+        <div class="calc" id="futInfo"></div>
+        <div class="hint">點位請以期貨 App 顯示為準。預設為 2026/10/16 收盤（加權 47,111；電子類 2,936），使用前請更新。期貨保證金請留在「現金」。</div>
+      </div>
+      <div class="box">
+        <div class="t">指數型 Put 權證／選擇權</div>
+        <div class="grid2">
+          <div><div class="mini">持有市值（萬，即權利金）</div><div class="row"><input type="number" id="n_optVal" min="0" step="5"></div></div>
+          <div><div class="mini">實質槓桿（倍）</div><div class="row"><input type="number" id="n_optLev" min="0" step="0.5"></div></div>
+        </div>
+        <div class="calc" id="optInfo"></div>
+        <div class="hint">券商 App 通常會顯示「實質槓桿」，填絕對值即可。模型以目前槓桿線性估算；大盤上漲時最多虧掉持有市值。</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>🔗 連動度設定</h2>
+      <div class="hint" style="margin:-4px 0 10px">連動度＝「科技股跌 10% 時，該標的約跌幾 %」。決定指數型避險與其他持股在你的壓力情境下的損益，是整個模型最關鍵的參數。</div>
+      <div class="field">
+        <label for="profile"><span>我的科技股比較像…（粗估預設）</span></label>
+        <select id="profile">
+          <option value="heavy">台積電等權值股為主</option>
+          <option value="mid">電子／AI 供應鏈中大型股</option>
+          <option value="small">中小型／高波動股</option>
+          <option value="custom">自訂（已手動調整）</option>
+        </select>
+      </div>
+      <div class="grid2" id="kFields"></div>
+      <details>
+        <summary>📐 用歷史大跌日估算連動度</summary>
+        <div class="hint">從券商 App 找 1–3 個大跌日：填「標的當天跌幅」與「你的科技股當天跌幅」。例：加權 −2%、你的科技股 −3%，填 2 與 3。</div>
+        <div class="field" style="margin-top:8px">
+          <label for="estTarget"><span>要估算哪一項？</span></label>
+          <select id="estTarget">
+            <option value="kIdx">加權指數（含指數型 ETF、微台、權證／選擇權）</option>
+            <option value="kElec">電子類指數（小型電子期）</option>
+            <option value="kFin">金融股</option>
+            <option value="kOth">其他持倉</option>
+          </select>
+        </div>
+        <div class="est" id="estRows"></div>
+        <div class="estres" id="estRes"></div>
+        <button class="small primary" id="estApply">套用估算結果</button>
+      </details>
+    </div>
+
+    <div class="card">
+      <details>
+        <summary>進階參數（追繳線、補繳規則）</summary>
+        <div id="advFields"></div>
+        <label class="toggle"><input type="checkbox" id="useHedge"><span>避險獲利與權證／選擇權價值可轉入補繳融資</span></label>
+        <label class="toggle"><input type="checkbox" id="sellFin"><span>緊急時可賣出非擔保品的現股（金融股、未設為擔保的 ETF／其他）補繳（T+2 交割，簡化視為可用）</span></label>
+      </details>
+      <div style="display:flex;gap:8px;margin-top:12px">
+        <button class="small" id="resetBtn">重設</button>
+        <button class="small primary" id="copyBtn">複製評估結果</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 右：結果 -->
+  <div>
+    <div class="card" id="overview">
+      <div class="top">
+        <div class="ring" id="ring"><div class="in"><div class="num" id="scoreNum">0</div><div class="lab">風險分數 / 100</div></div></div>
+        <div>
+          <div class="grade" id="gradeTxt"></div>
+          <div class="verdict" id="verdictTxt"></div>
+        </div>
+      </div>
+      <div class="metrics" id="metrics"></div>
+    </div>
+
+    <div class="card">
+      <h2>🧩 資產配置</h2>
+      <div class="bar" id="allocBar"></div>
+      <div class="legend" id="allocLegend"></div>
+      <div class="cap" id="allocCap"></div>
+    </div>
+
+    <div class="card">
+      <h2>💥 壓力測試：科技股下跌多少？</h2>
+      <div class="row">
+        <input type="range" id="shock" min="0" max="50" step="1" aria-label="科技股下跌幅度">
+        <strong id="shockVal" style="width:56px;text-align:right"></strong>
+      </div>
+      <div class="chips" id="limitChips"></div>
+      <div class="shockbox" id="shockBox"></div>
+    </div>
+
+    <div class="card">
+      <h2>📉 淨值變動 vs. 科技股跌幅</h2>
+      <canvas id="chart" aria-label="淨值變動圖"></canvas>
+      <div class="cap">藍線＝目前配置（含避險）；灰線＝若沒有避險損益；背景橘色＝需補繳區、紅色＝補不起（斷頭風險）；垂直虛線＝融資追繳點。</div>
+    </div>
+
+    <div class="card">
+      <h2>📋 情境總表</h2>
+      <div class="tbl"><table id="scnTable"></table></div>
+      <div class="cap">「連 3 跌停」＝個股單日 10% 漲跌幅限制下連跌三天：1 − 0.9³ ≈ −27.1%。</div>
+    </div>
+
+    <div class="card">
+      <h2>🔍 風險分數拆解</h2>
+      <div id="breakdown"></div>
+    </div>
+
+    <div class="card">
+      <h2>🧭 調整建議</h2>
+      <ul class="sug" id="suggest"></ul>
+      <div class="foot">參考做法（非投資建議）：大型機構常見的防線是 ①保留現金 ②對沖空單 ③核心穩健部位（如金融股）④不用或少用融資，讓單一黑天鵝不會逼你被迫賣在低點。</div>
+    </div>
+
+    <div class="card">
+      <details>
+        <summary>計算方法與模型限制</summary>
+        <div class="foot" style="font-size:13.5px;line-height:1.75">
+          <b>驅動變數</b>：科技股下跌幅度 x。每類資產跌幅 = x × 連動度（科技股連動度＝100%；指數型 ETF 與加權指數共用同一連動度）。<br>
+          <b>淨值</b> = 各類持股 + 現金 + 權證／選擇權市值 − 融資借款。<br>
+          <b>期貨損益</b> = 名目金額 × 標的連動度 × x（反彈會虧）。名目 = 口數 × 每點金額 × 指數點位（小型電子期每點 500 元、微型台指期每點 10 元）。<br>
+          <b>權證／選擇權</b>：有效名目 = 持有市值 × 實質槓桿；下跌時獲利 = 有效名目 × 指數跌幅；上漲時虧損最多為持有市值。<br>
+          <b>融資維持率</b> = 擔保品市值 ÷ 融資借款，低於追繳線（預設 130%）會被通知補繳。<br>
+          <b>追繳點</b> = (擔保品市值 − 追繳線 × 借款) ÷ Σ(擔保品市值 × 連動度)。<br>
+          <b>補繳金額</b> = 借款 − 下跌後擔保品市值 ÷ 補繳目標維持率（預設 166%）。<br>
+          <b>可動用資金</b> = 現金 + 避險獲利與權證價值（若勾選）+ 非擔保現股市值（若勾選）。不夠補繳 → 判定為斷頭風險。<br>
+          <b>避險覆蓋率</b> = 避險部位的折算部位 ÷ 全部持股的折算部位（皆乘上連動度）。<br>
+          <b>限制</b>：未計入利息、手續費、期貨保證金追加、選擇權時間價值與波動率變化、實質槓桿隨價格變動（下跌時實際槓桿通常上升）、個股差異與跌停鎖死無法賣出的流動性風險。連動度為使用者估計值，實際會隨行情改變。
+        </div>
+      </details>
+    </div>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+/*CALC_START*/
+const DEFAULTS = {
+  tech:1500, loan:800, etf:0, oth:0, fin:0, cash:20,
+  colTech:true, colEtf:false, colOth:false,
+  futMode:'elec', futN:0, elecPx:2935.7, txPx:47111, futDirect:0,
+  optVal:0, optLev:5,
+  kIdx:75, kElec:90, kFin:40, kOth:80, profile:'mid',
+  th:130, target:166, useHedge:true, sellFin:true, shock:30
+};
+const POSKEYS = ['tech','loan','etf','oth','fin','cash','colTech','colEtf','colOth','futMode','futN','futDirect','optVal','optLev'];
+const PROFILES = {
+  heavy:{kIdx:85,kElec:95},
+  mid:{kIdx:75,kElec:90},
+  small:{kIdx:60,kElec:75}
+};
+function clamp(v,a=0,b=100){return Math.max(a,Math.min(b,v));}
+const sum = (arr,f)=>arr.reduce((a,x)=>a+f(x),0);
+
+function futNotional(s){
+  if(s.futMode==='elec') return s.futN*500*s.elecPx/10000;
+  if(s.futMode==='micro') return s.futN*10*s.txPx/10000;
+  return s.futDirect;
+}
+function futK(s){ return (s.futMode==='elec' ? s.kElec : s.kIdx)/100; }
+function optNotional(s){ return s.optVal*Math.abs(s.optLev); }
+function holdings(s){
+  return [
+    {key:'tech',name:'科技股',v:s.tech,k:1,col:s.colTech},
+    {key:'etf',name:'指數型 ETF',v:s.etf,k:s.kIdx/100,col:s.colEtf},
+    {key:'oth',name:'其他持倉',v:s.oth,k:s.kOth/100,col:s.colOth},
+    {key:'fin',name:'金融股',v:s.fin,k:s.kFin/100,col:false}
+  ];
+}
+// x：科技股下跌幅度（0.3 = 跌 30%；負數 = 上漲）
+function hedgePnL(s,x){
+  const fg = futNotional(s)*futK(s)*x;
+  const d = x*s.kIdx/100;
+  const N = optNotional(s);
+  const og = d>=0 ? N*d : -Math.min(s.optVal, N*(-d));
+  return {fg,og};
+}
+function scenario(s,x,noHedge){
+  const th=s.th/100, tg=s.target/100;
+  const H = holdings(s).map(h=>Object.assign({},h,{v2:Math.max(0,h.v*(1-x*h.k))}));
+  const stock2 = sum(H,h=>h.v2);
+  const col2 = sum(H,h=>h.col?h.v2:0);
+  const nonCol2 = sum(H,h=>h.col?0:h.v2);
+  const hp = noHedge ? {fg:0,og:0} : hedgePnL(s,x);
+  const optV2 = noHedge ? s.optVal : Math.max(0,s.optVal+hp.og);
+  const hg = hp.fg + (optV2 - s.optVal);
+  const eq0 = sum(H,h=>h.v)+s.cash+s.optVal-s.loan;
+  const eq2 = stock2+s.cash+optV2+hp.fg-s.loan;
+  const ratio = s.loan>0 ? col2/s.loan : Infinity;
+  const pl = eq2-eq0;
+  const plPct = eq0>0 ? pl/eq0 : -1;
+  let need=0, funds=0, status='safe';
+  if(s.loan>0 && ratio<th){
+    need = Math.min(s.loan, Math.max(0, s.loan - col2/tg));
+    funds = s.cash + (s.useHedge ? Math.max(0,hp.fg)+optV2 : 0) + (s.sellFin ? nonCol2 : 0);
+  }
+  if(eq2<=0) status='liq';
+  else if(s.loan>0){
+    if(ratio<th) status = funds>=need ? 'call':'liq';
+    else if(ratio<th+0.30) status='warn';
+    else status='safe';
+  } else {
+    status = plPct<=-0.30 ? 'call' : plPct<=-0.15 ? 'warn' : 'safe';
+  }
+  return {x,H,eq0,eq2,ratio,pl,plPct,need,funds,status,fg:hp.fg,og:optV2-s.optVal,hg,col2};
+}
+function baseMetrics(s){
+  const H = holdings(s);
+  const stocks = sum(H,h=>h.v);
+  const total = stocks+s.cash+s.optVal;
+  const eq0 = total - s.loan;
+  const th = s.th/100;
+  const V = sum(H,h=>h.col?h.v:0);
+  const K = sum(H,h=>h.col?h.v*h.k:0);
+  const grossK = sum(H,h=>h.v*h.k);
+  const hedgeK = futNotional(s)*futK(s) + optNotional(s)*s.kIdx/100;
+  let callDrop=null;
+  if(s.loan>0){ callDrop = K>0 ? Math.min(1,(V-th*s.loan)/K) : (V>=th*s.loan?null:0); }
+  return {
+    H, stocks, total, eq0, V, K, grossK, hedgeK,
+    techPct: total>0? s.tech/total:0, etfPct: total>0? s.etf/total:0, othPct: total>0? s.oth/total:0,
+    finPct: total>0? s.fin/total:0, cashPct: total>0? s.cash/total:0, optPct: total>0? s.optVal/total:0,
+    leverage: eq0>0 ? total/eq0 : Infinity,
+    ratio0: s.loan>0 ? (V/s.loan) : Infinity,
+    callDrop,
+    grossExp: eq0>0 ? grossK/eq0 : Infinity,
+    netExp: eq0>0 ? (grossK-hedgeK)/eq0 : Infinity,
+    hedgeCover: grossK>0 ? hedgeK/grossK : 0
+  };
+}
+const pctf = (n,d=1)=> (n*100).toFixed(d)+'%';
+const fmt = n => Math.round(n).toLocaleString('zh-TW');
+
+function scoreAll(s,m){
+  // 1 融資壓力
+  let s1=0, d1='沒有融資借款，不會被追繳。';
+  if(s.loan>0){
+    if(m.callDrop===null){ s1=0; d1='擔保品充足，短期不會觸及追繳。'; }
+    else if(m.callDrop<=0){ s1=100; d1='目前維持率已低於追繳線！'; }
+    else { s1=clamp((0.45-m.callDrop)/0.45*100); d1=`科技股再跌 ${pctf(m.callDrop)} 就會觸及追繳線。`; }
+  }
+  // 2 防線（現金 / 補繳能力）
+  const r30 = scenario(s,0.30);
+  let s2a=0, d2='';
+  if(s.loan>0 && r30.ratio<s.th/100){
+    const c = r30.need>0 ? r30.funds/r30.need : 99;
+    s2a = c<1 ? 100 : clamp(70*(3-c)/2);
+    d2 = `跌 30% 時需補繳 ${fmt(r30.need)} 萬，可動用資金 ${fmt(r30.funds)} 萬。`;
+  } else if(s.loan>0){ d2='跌 30% 仍不需補繳。'; }
+  const s2b = clamp((0.20-m.cashPct)/0.20*80);
+  const s2 = Math.max(s2a,s2b);
+  if(!d2 || s2b>s2a) d2 = `現金占總資產 ${pctf(m.cashPct)}（機構常抓 15–20% 以上作為低接子彈）。` + (s2a>0? ' '+d2:'');
+  // 3 淨曝險
+  const s3 = clamp(m.netExp/3*100);
+  const d3 = `扣除避險後，科技股下跌時淨值約承受 ${isFinite(m.netExp)?m.netExp.toFixed(2):'∞'} 倍跌幅（1 倍＝科技股跌 10% 淨值約跌 10%）。`;
+  // 4 避險不足（曝險很低時不重罰）
+  const s4 = clamp(100*(1-m.hedgeCover/0.5)) * Math.min(1, isFinite(m.grossExp)?m.grossExp:1);
+  const d4 = `避險折算後約覆蓋整體持股敏感度的 ${pctf(m.hedgeCover,0)}（以 50% 為充分）。`;
+  // 5 集中度
+  const s5 = clamp((m.techPct-0.40)/0.50*100);
+  const d5 = `科技股占總資產 ${pctf(m.techPct,0)}（≤40% 視為分散）。`;
+  const items = [
+    {name:'融資追繳壓力', w:.30, score:s1, desc:d1},
+    {name:'現金與補繳能力', w:.20, score:s2, desc:d2},
+    {name:'淨曝險／槓桿', w:.25, score:s3, desc:d3},
+    {name:'避險不足', w:.10, score:s4, desc:d4},
+    {name:'科技股集中度', w:.15, score:s5, desc:d5},
+  ];
+  const total = items.reduce((a,i)=>a+i.w*i.score,0);
+  let grade;
+  if(total<20) grade={k:'A',t:'穩健',c:'var(--safe)',v:'配置相當有防禦力，單一黑天鵝不太可能逼你被迫賣出。'};
+  else if(total<40) grade={k:'B',t:'尚可',c:'#8fd16a',v:'整體還算穩，但某些環節仍有改善空間，建議檢視下方拆解。'};
+  else if(total<60) grade={k:'C',t:'警戒',c:'var(--warn)',v:'遇到連續重挫時壓力不小，建議提早補強現金或避險。'};
+  else if(total<80) grade={k:'D',t:'高風險',c:'var(--call)',v:'槓桿或集中度偏高，技術性熊市可能讓你被迫停損或補繳。'};
+  else grade={k:'E',t:'極高風險',c:'var(--liq)',v:'非常脆弱：再一波下殺就可能面臨斷頭，請優先降低融資與曝險。'};
+  return {items,total,grade};
+}
+// 賣出擔保品還款 S，使得科技股跌 x 時維持率剛好等於追繳線
+function reduceLoanNeeded(s,x){
+  const m = baseMetrics(s);
+  const th=s.th/100, V=m.V, K=m.K;
+  if(V<=0) return 0;
+  const num = th*s.loan - V + x*K, den = th - 1 + x*K/V;
+  if(den<=0||num<=0) return 0;
+  return Math.min(s.loan, num/den);
+}
+function estimateK(rows){
+  let num=0, den=0;
+  rows.forEach(([a,b])=>{ if(isFinite(a)&&isFinite(b)&&b!==0){ num+=a*b; den+=b*b; } });
+  return den>0 ? num/den : null;
+}
+function suggestions(s,m){
+  const out=[];
+  if(s.loan>0){
+    if(m.callDrop!==null && m.callDrop<=0){
+      out.push({l:'bad',t:`🚨 目前維持率約 ${pctf(m.ratio0,0)}，已低於追繳線 ${s.th}%。應立即補繳或賣股還款。`});
+    } else if(m.callDrop!==null && m.callDrop<0.30){
+      const S=reduceLoanNeeded(s,0.30);
+      out.push({l:m.callDrop<0.15?'bad':'mid',t:`融資追繳點只在科技股 −${pctf(m.callDrop)}。若想撐到 −30% 才追繳，約需賣出擔保品還款 ${fmt(S)} 萬（或等額補入現金）。`});
+    } else if(m.callDrop!==null){
+      out.push({l:'ok',t:`融資追繳點在科技股 −${pctf(m.callDrop)}，緩衝尚可。`});
+    }
+  }
+  if(m.cashPct<0.10){
+    out.push({l:m.cashPct<0.05?'bad':'mid',t:`現金僅占 ${pctf(m.cashPct)}。大跌時沒有子彈可低接、也沒有資金補繳。可考慮拉高到 10–20%（約 ${fmt(m.total*0.15)} 萬）。`});
+  } else if(m.cashPct>=0.15){
+    out.push({l:'ok',t:`現金占 ${pctf(m.cashPct)}，有足夠緩衝與低接彈性。`});
+  }
+  if(m.grossK>0 && m.hedgeCover<0.2 && (m.techPct>0.5 || s.loan>0)){
+    const needK = 0.3*m.grossK - m.hedgeK;
+    const nElec = Math.ceil(needK/((s.kElec/100)*500*s.elecPx/10000));
+    const nMicro = Math.ceil(needK/((s.kIdx/100)*10*s.txPx/10000));
+    out.push({l:m.hedgeCover<0.05?'bad':'mid',t:`避險偏少（覆蓋約 ${pctf(m.hedgeCover,0)}）。若想覆蓋到約 30%，約需再空 ${nElec} 口小型電子期貨，或 ${nMicro} 口微型台指期貨（以目前連動度與點位估算）。注意：期貨在反彈時會虧損。`});
+  } else if(m.hedgeCover>=0.3){
+    out.push({l:'ok',t:`避險覆蓋約 ${pctf(m.hedgeCover,0)}，下跌時能抵銷一部分損失；但別忘了反彈時期貨空單會拖累報酬。`});
+  }
+  if(m.techPct>0.70){
+    out.push({l:m.techPct>0.85?'bad':'mid',t:`科技股占總資產 ${pctf(m.techPct,0)}，高度集中同一產業循環。可考慮把一部分轉到指數型 ETF 或核心穩健部位（如金融股）。`});
+  }
+  if(m.finPct<0.10 && m.techPct>0.6){
+    out.push({l:'mid',t:`核心穩健部位（金融股）僅 ${pctf(m.finPct,0)}。它們通常與科技股循環連動較低，且常有股息，可作為危機時的「可賣出資金」來源。`});
+  }
+  if(!out.length) out.push({l:'ok',t:'目前沒有明顯的結構性弱點。持續追蹤維持率與各類部位比重即可。'});
+  return out;
+}
+/*CALC_END*/
+
+/* ================= UI ================= */
+const $ = id => document.getElementById(id);
+let S = Object.assign({}, DEFAULTS);
+
+// 套用範例前先清空所有持倉與避險部位，避免殘留
+const ZERO = {tech:0,loan:0,etf:0,oth:0,fin:0,cash:0,colTech:true,colEtf:false,colOth:false,futMode:'elec',futN:0,futDirect:0,optVal:0,optLev:5};
+const PRESETS = [
+  {name:'🔥 散戶滿倉融資', v:{tech:1500,loan:800,cash:20}},
+  {name:'😰 逼近追繳線', v:{tech:1000,loan:720,cash:30}},
+  {name:'🙂 無槓桿穩健型', v:{tech:600,etf:100,fin:150,cash:150,futMode:'micro',futN:2}},
+  {name:'🏦 機構式防禦', v:{tech:400,etf:100,fin:300,cash:150,futMode:'elec',futN:1,optVal:20,optLev:5}},
+];
+const POS = [
+  {k:'tech',label:'多頭科技股持倉市值',max:3000,hint:'半導體、AI 供應鏈、電子零組件等（現股＋融資買進的總市值）'},
+  {k:'loan',label:'　└ 融資借款金額',max:2500,hint:'融資餘額（借款本金）。融資成數最高 6 成，滑桿上限＝擔保品市值 × 60%'},
+  {k:'etf',label:'指數型 ETF 市值',max:3000,hint:'如 0050、006208 等追蹤大盤的 ETF'},
+  {k:'oth',label:'其他（主動式 ETF 或個股）市值',max:3000,hint:'不屬於上述的持股，跌幅連動度可在下方調整'},
+  {k:'fin',label:'核心穩健金融股市值',max:1500,hint:'金控、銀行、壽險等低連動度的核心持股'},
+  {k:'cash',label:'現金（可隨時動用）',max:1500,hint:'證券戶／銀行可動用資金（含期貨保證金），用來低接或補繳'},
+];
+const KF = [
+  {k:'kIdx',label:'加權指數'},
+  {k:'kElec',label:'電子類指數'},
+  {k:'kFin',label:'金融股'},
+  {k:'kOth',label:'其他持倉'},
+];
+const ADV = [
+  {k:'th',label:'融資追繳維持率',unit:'%',min:120,max:160,step:1},
+  {k:'target',label:'補繳目標維持率',unit:'%',min:130,max:200,step:1},
+];
+const NUMKEYS = ['futN','elecPx','txPx','futDirect','optVal','optLev'];
+
+function num(v){const n=parseFloat(v);return isNaN(n)?0:Math.max(0,n);}
+
+function buildInputs(){
+  $('presets').innerHTML = PRESETS.map((p,i)=>`<button data-i="${i}">${p.name}</button>`).join('');
+  $('presets').onclick = e=>{
+    const b=e.target.closest('button'); if(!b) return;
+    const p=PRESETS[+b.dataset.i];
+    Object.assign(S,ZERO,p.v);
+    syncInputs(); render(); toast('已套用：'+p.name.replace(/^\S+\s/,''));
+  };
+  $('posFields').innerHTML = POS.map(f=>`
+    <div class="field">
+      <label for="n_${f.k}"><span>${f.label}</span><span class="pctTag" id="tag_${f.k}"></span></label>
+      <div class="row">
+        <input type="range" id="r_${f.k}" min="0" max="${f.max}" step="10">
+        <input type="number" id="n_${f.k}" min="0" step="10"><span class="unit">萬</span>
+      </div>
+      <div class="hint" id="hint_${f.k}">${f.hint}</div>
+    </div>`).join('');
+  $('kFields').innerHTML = KF.map(f=>`
+    <div><div class="mini">${f.label}</div><div class="row"><input type="number" id="n_${f.k}" min="0" max="150" step="5"><span class="unit">%</span></div></div>`).join('');
+  $('advFields').innerHTML = ADV.map(f=>`
+    <div class="field" style="margin-top:10px">
+      <label for="n_${f.k}"><span>${f.label}</span></label>
+      <div class="row">
+        <input type="range" id="r_${f.k}" min="${f.min}" max="${f.max}" step="${f.step}">
+        <input type="number" id="n_${f.k}" min="${f.min}" max="${f.max}" step="${f.step}"><span class="unit">${f.unit}</span>
+      </div>
+    </div>`).join('');
+  $('estRows').innerHTML = [0,1,2].map(i=>`
+    <div><div class="mini">第 ${i+1} 天：標的跌幅 %</div><input type="number" id="ea${i}" step="0.1" style="width:100%"></div>
+    <div><div class="mini">同日我的科技股跌幅 %</div><input type="number" id="eb${i}" step="0.1" style="width:100%"></div>`).join('');
+
+  const bind = (k,hasRange)=>{
+    const n=$('n_'+k), r=hasRange?$('r_'+k):null;
+    n.addEventListener('input',()=>{S[k]=num(n.value); if(r) r.value=S[k]; if(k==='kIdx'||k==='kElec'){S.profile='custom';$('profile').value='custom';} render();});
+    if(r) r.addEventListener('input',()=>{S[k]=num(r.value); n.value=S[k]; render();});
+  };
+  POS.forEach(f=>bind(f.k,true));
+  KF.forEach(f=>bind(f.k,false));
+  ADV.forEach(f=>bind(f.k,true));
+  NUMKEYS.forEach(k=>bind(k,false));
+  ['colTech','colEtf','colOth','useHedge','sellFin'].forEach(k=>{$(k).onchange=e=>{S[k]=e.target.checked;render();};});
+  $('futMode').onchange=e=>{S.futMode=e.target.value;render();};
+  $('profile').onchange=e=>{
+    const v=e.target.value; S.profile=v;
+    if(PROFILES[v]){S.kIdx=PROFILES[v].kIdx;S.kElec=PROFILES[v].kElec;$('n_kIdx').value=S.kIdx;$('n_kElec').value=S.kElec;}
+    render();
+  };
+  $('shock').oninput=e=>{S.shock=num(e.target.value);render();};
+  $('resetBtn').onclick=()=>{S=Object.assign({},DEFAULTS);syncInputs();render();toast('已重設');};
+  $('copyBtn').onclick=copySummary;
+  $('limitChips').innerHTML = [[1,10],[2,19],[3,27.1],[5,40.95]].map(([d,v])=>`<button class="small" data-v="${v}">連 ${d} 跌停（−${v}%）</button>`).join('')
+    + `<button class="small" data-v="20">技術性熊市 −20%</button>`;
+  $('limitChips').onclick=e=>{const b=e.target.closest('button');if(!b)return;S.shock=Math.round(parseFloat(b.dataset.v));render();syncShock();};
+  // 估算器
+  [0,1,2].forEach(i=>{$('ea'+i).oninput=updateEst;$('eb'+i).oninput=updateEst;});
+  $('estApply').onclick=()=>{
+    const k=updateEst(); if(k===null){toast('請先填入至少一組數據');return;}
+    const key=$('estTarget').value;
+    S[key]=Math.round(clamp(k*100,0,150));
+    if(key==='kIdx'||key==='kElec'){S.profile='custom';}
+    syncInputs(); render(); toast('已套用：'+S[key]+'%');
+  };
+}
+function updateEst(){
+  const rows=[];
+  for(let i=0;i<3;i++){
+    const a=parseFloat($('ea'+i).value), b=parseFloat($('eb'+i).value);
+    if(!isNaN(a)&&!isNaN(b)&&b!==0) rows.push([a,b]);
+  }
+  const k=estimateK(rows);
+  $('estRes').textContent = k===null ? '填入至少一組數據後顯示結果' : `估算連動度 ≈ ${(clamp(k*100,0,150)).toFixed(0)}%（根據 ${rows.length} 組數據）`;
+  return k;
+}
+function syncShock(){ $('shock').value=S.shock; }
+function syncInputs(){
+  POS.forEach(f=>{$('n_'+f.k).value=S[f.k];$('r_'+f.k).value=S[f.k];});
+  KF.forEach(f=>{$('n_'+f.k).value=S[f.k];});
+  ADV.forEach(f=>{$('n_'+f.k).value=S[f.k];$('r_'+f.k).value=S[f.k];});
+  NUMKEYS.forEach(k=>{$('n_'+k).value=S[k];});
+  ['colTech','colEtf','colOth','useHedge','sellFin'].forEach(k=>{$(k).checked=!!S[k];});
+  $('futMode').value=S.futMode; $('profile').value=S.profile; syncShock();
+}
+function toast(t){const el=$('toast');el.textContent=t;el.classList.add('show');clearTimeout(toast.t);toast.t=setTimeout(()=>el.classList.remove('show'),1600);}
+
+const STATUS_TXT = (st,loan)=>({
+  safe:'🟢 安全', warn:'🟡 警戒',
+  call: loan>0?'🟠 追繳（尚可補）':'🟠 重度回撤',
+  liq:'🔴 斷頭風險'
+}[st]);
+const statusChip = (st,loan)=>`<span class="status st-${st}">${STATUS_TXT(st,loan)}</span>`;
+const signed = (n,d=0)=> (n>=0?'+':'−')+Math.abs(n).toLocaleString('zh-TW',{maximumFractionDigits:d,minimumFractionDigits:d});
+const cls = n => n<0?'neg':n>0?'pos':'';
+
+function render(){
+  try{ localStorage.setItem('twRiskState2',JSON.stringify(S)); }catch(e){}
+  const m = baseMetrics(S);
+  // 驗證
+  const err=$('err'); const msgs=[];
+  if(m.eq0<=0) msgs.push('融資借款大於或等於總資產，淨值 ≤ 0，請檢查輸入。');
+  if(S.loan>0 && m.V<S.loan) msgs.push('融資借款大於「擔保品市值」，請確認勾選了融資買進的標的（科技股／ETF／其他）。');
+  err.style.display=msgs.length?'block':'none'; err.innerHTML=msgs.join('<br>');
+  // 避險 UI
+  const mode=S.futMode;
+  $('futContracts').style.display = mode==='direct'?'none':'grid';
+  $('futDirectRow').style.display = mode==='direct'?'block':'none';
+  $('n_elecPx').style.display = mode==='elec'?'block':'none';
+  $('n_txPx').style.display = mode==='micro'?'block':'none';
+  $('pxLabel').textContent = mode==='elec'?'電子類指數點位':'加權指數點位';
+  const fN=futNotional(S), fK=futK(S);
+  const unit = mode==='elec' ? 500*S.elecPx/10000 : mode==='micro' ? 10*S.txPx/10000 : null;
+  $('futInfo').innerHTML = (unit!==null ? `1 口 ≈ ${unit.toFixed(1)} 萬｜` : '') + `空單名目 ≈ <b>${fmt(fN)}</b> 萬｜標的連動度 ${Math.round(fK*100)}%｜折算避險 ≈ ${fmt(fN*fK)} 萬`;
+  $('optInfo').innerHTML = `有效名目 ≈ <b>${fmt(optNotional(S))}</b> 萬｜標的：加權指數（連動度 ${S.kIdx}%）｜折算避險 ≈ ${fmt(optNotional(S)*S.kIdx/100)} 萬`;
+  // 比例標籤
+  const tg={tech:m.techPct,etf:m.etfPct,oth:m.othPct,fin:m.finPct,cash:m.cashPct};
+  Object.keys(tg).forEach(k=>$('tag_'+k).textContent = m.total>0? '占總資產 '+pctf(tg[k],0):'');
+  $('tag_loan').textContent = m.V>0 ? '融資占擔保品 '+pctf(S.loan/m.V,0) : '';
+  // 融資成數最高 6 成：滑桿上限 = 擔保品市值 × 60%（數字框仍可輸入更高，用於股價下跌後借款占比上升的情況）
+  const maxLoan = Math.max(10, Math.round(m.V*0.6));
+  $('r_loan').step = 1; $('r_loan').max = maxLoan; $('r_loan').value = S.loan;
+  $('hint_loan').textContent = (m.V>0 && S.loan>m.V*0.6+0.5)
+    ? `借款已超過擔保品市值 6 成（約 ${pctf(S.loan/m.V,0)}）：代表股價已較買進時下跌，維持率只剩 ${pctf(m.ratio0,0)}。`
+    : `融資成數最高 6 成，滑桿上限＝擔保品市值 × 60%（目前 ${fmt(maxLoan)} 萬）`;
+  $('shockVal').textContent = '−'+S.shock+'%';
+  if(m.eq0<=0 || m.total<=0){ ['metrics','allocBar','shockBox','breakdown','suggest','scnTable'].forEach(id=>$(id).innerHTML=''); $('scoreNum').textContent='--'; return; }
+
+  const sc = scoreAll(S,m);
+  $('scoreNum').textContent = Math.round(sc.total);
+  $('ring').style.setProperty('--p',sc.total); $('ring').style.setProperty('--c',sc.grade.c);
+  $('gradeTxt').innerHTML = `等級 <span style="color:${sc.grade.c}">${sc.grade.k}｜${sc.grade.t}</span>`;
+  $('verdictTxt').textContent = sc.grade.v;
+
+  // 指標
+  const cards = [
+    ['淨值（自有資金）', fmt(m.eq0)+' 萬', '總資產 '+fmt(m.total)+' 萬'],
+    ['融資維持率', S.loan>0? pctf(m.ratio0,0):'無融資', '追繳線 '+S.th+'%'],
+    ['距追繳還能跌', S.loan>0 ? (m.callDrop===null?'充足':(m.callDrop<=0?'已觸及':'−'+pctf(m.callDrop))) : '—', '科技股跌幅'],
+    ['槓桿倍數', isFinite(m.leverage)? m.leverage.toFixed(2)+'×':'—', '總資產 ÷ 淨值'],
+    ['淨曝險（扣避險）', isFinite(m.netExp)? m.netExp.toFixed(2)+'×':'—', '科技股跌時的淨值敏感度'],
+    ['避險覆蓋率', pctf(m.hedgeCover,0), '折算避險 '+fmt(m.hedgeK)+' 萬'],
+  ];
+  $('metrics').innerHTML = cards.map(c=>`<div class="metric"><div class="k">${c[0]}</div><div class="v">${c[1]}</div><div class="d">${c[2]}</div></div>`).join('');
+
+  // 配置條
+  const segs=[['科技股',m.techPct,'#4da3ff'],['指數型 ETF',m.etfPct,'#7cc4ff'],['其他',m.othPct,'#9b8cff'],['金融股',m.finPct,'#2fbf8f'],['現金',m.cashPct,'#f2b84b'],['權證／選擇權',m.optPct,'#ff9bd0']];
+  $('allocBar').innerHTML = segs.map(s=>`<div style="width:${s[1]*100}%;background:${s[2]}">${s[1]>0.07?pctf(s[1],0):''}</div>`).join('');
+  $('allocLegend').innerHTML = segs.filter(s=>s[1]>0).map(s=>`<span><i class="dot" style="background:${s[2]}"></i>${s[0]} ${pctf(s[1],1)}（${fmt(s[1]*m.total)} 萬）</span>`).join('')
+    + (S.loan>0?`<span><i class="dot" style="background:#ff7b88"></i>融資負債 ${fmt(S.loan)} 萬</span>`:'')
+    + (fN>0?`<span><i class="dot" style="background:#c9d3e2"></i>期貨空單名目 ${fmt(fN)} 萬</span>`:'');
+  $('allocCap').textContent = `總資產 ${fmt(m.total)} 萬，其中借來的錢 ${fmt(S.loan)} 萬（占總資產 ${pctf(S.loan/m.total,0)}）。`;
+
+  // 單一情境
+  const x=S.shock/100, r=scenario(S,x);
+  const loan=S.loan>0;
+  let advice='';
+  if(r.status==='liq'){ advice = r.eq2<=0 ? '此情境下淨值歸零，等於爆倉。' : `需補繳 ${fmt(r.need)} 萬，但可動用資金只有 ${fmt(r.funds)} 萬 → 很可能被強制賣出。`; }
+  else if(r.status==='call'){ advice = loan? `維持率跌破 ${S.th}%，需補繳約 ${fmt(r.need)} 萬；你的可動用資金 ${fmt(r.funds)} 萬足以補上，但等於被迫動用全部彈藥。` : '雖無融資，但淨值回撤已超過 30%。'; }
+  else if(r.status==='warn'){ advice = loan? `尚未追繳，但維持率已進入警戒區（< ${S.th+30}%）。`:'淨值回撤 15–30%，屬明顯受傷。'; }
+  else advice='此情境下仍在安全範圍。';
+  const holdRows = r.H.filter(h=>h.v>0).map(h=>`<div><span>${h.name}市值</span><b>${fmt(h.v)} → ${fmt(h.v2)} 萬</b></div>`).join('');
+  $('shockBox').innerHTML = `
+    <div class="head"><strong>科技股 −${S.shock}% 時</strong>${statusChip(r.status,S.loan)}</div>
+    <div class="cap" style="margin-top:4px">對應：加權指數約 −${(x*S.kIdx).toFixed(1)}%｜電子類指數約 −${(x*S.kElec).toFixed(1)}%</div>
+    <div class="kv">
+      ${holdRows}
+      ${fN>0?`<div><span>期貨損益</span><b class="${cls(r.fg)}">${signed(r.fg)} 萬</b></div>`:''}
+      ${S.optVal>0?`<div><span>權證／選擇權損益</span><b class="${cls(r.og)}">${signed(r.og)} 萬</b></div>`:''}
+      <div><span>淨值</span><b>${fmt(r.eq0)} → ${fmt(r.eq2)} 萬</b></div>
+      <div><span>淨值變動</span><b class="${cls(r.pl)}">${signed(r.plPct*100,1)}%（${signed(r.pl)} 萬）</b></div>
+      <div><span>融資維持率</span><b>${loan? pctf(m.ratio0,0)+' → '+pctf(r.ratio,0):'—'}</b></div>
+      ${loan&&r.need>0?`<div><span>需補繳金額</span><b>${fmt(r.need)} 萬</b></div><div><span>可動用資金</span><b>${fmt(r.funds)} 萬</b></div>`:''}
+    </div>
+    <div class="foot" style="margin-top:10px;font-size:13.5px;color:#c9d3e2">${advice}</div>`;
+
+  // 情境表
+  const rows=[['反彈 +10%',-0.10],['回檔 −10%',0.10],['技術性熊市 −20%',0.20],['連 3 跌停 −27.1%',0.271],['重挫 −30%',0.30],['黑天鵝 −40%',0.40]];
+  if(!rows.some(r=>Math.abs(r[1]-x)<0.005)) rows.push(['自訂 −'+S.shock+'%',x]);
+  let html='<tr><th>情境（科技股）</th><th>淨值</th><th>淨值變動</th><th>避險損益</th><th>維持率</th><th>需補繳</th><th>狀態</th></tr>';
+  rows.forEach(([n,xx])=>{
+    const q=scenario(S,xx);
+    html+=`<tr class="${Math.abs(xx-x)<0.005?'cur':''}"><td>${n}</td><td>${fmt(q.eq2)} 萬</td><td class="${cls(q.pl)}">${signed(q.plPct*100,1)}%</td><td class="${cls(q.hg)}">${signed(q.hg)} 萬</td><td>${loan?pctf(q.ratio,0):'—'}</td><td>${q.need>0?fmt(q.need)+' 萬':'—'}</td><td>${statusChip(q.status,S.loan)}</td></tr>`;
+  });
+  $('scnTable').innerHTML=html;
+
+  // 拆解
+  $('breakdown').innerHTML = sc.items.map(i=>{
+    const c = i.score<30?'var(--safe)':i.score<55?'var(--warn)':i.score<75?'var(--call)':'var(--liq)';
+    return `<div class="bk"><div class="n">${i.name}<small>權重 ${Math.round(i.w*100)}%</small></div>
+      <div class="track"><i style="width:${i.score}%;background:${c}"></i></div><div class="s">${Math.round(i.score)}</div>
+      <div class="bkd">${i.desc}</div></div>`;}).join('');
+
+  // 建議
+  $('suggest').innerHTML = suggestions(S,m).map(s=>`<li class="${s.l}">${s.t}</li>`).join('');
+  drawChart(m);
+  window._last={m,sc,r,fN};
+}
+
+function drawChart(m){
+  const cv=$('chart'), dpr=window.devicePixelRatio||1;
+  const w=cv.clientWidth, h=cv.clientHeight||300;
+  if(!w) return;
+  cv.width=w*dpr; cv.height=h*dpr;
+  const c=cv.getContext('2d'); c.setTransform(dpr,0,0,dpr,0,0); c.clearRect(0,0,w,h);
+  const padL=46,padR=14,padT=14,padB=32;
+  const pts=[];
+  for(let i=0;i<=50;i++){
+    const x=i/100, a=scenario(S,x), b=scenario(S,x,true);
+    pts.push({x,a:Math.max(-100,a.plPct*100),b:Math.max(-100,b.plPct*100),st:a.status});
+  }
+  let ymax=Math.ceil(Math.max(10,...pts.map(p=>Math.max(p.a,p.b)))/10)*10;
+  let ymin=Math.max(-100,Math.floor(Math.min(-10,...pts.map(p=>Math.min(p.a,p.b)))/10)*10);
+  const sx=x=>padL+x/0.5*(w-padL-padR);
+  const sy=y=>padT+(ymax-y)/(ymax-ymin)*(h-padT-padB);
+  const colW=(w-padL-padR)/50;
+  pts.forEach(p=>{
+    if(p.st==='call'||p.st==='liq'){
+      c.fillStyle = p.st==='liq'?'rgba(255,77,94,.16)':'rgba(255,138,61,.14)';
+      c.fillRect(sx(p.x)-colW/2<padL?padL:sx(p.x)-colW/2,padT,colW+0.5,h-padT-padB);
+    }
+  });
+  c.font='11px sans-serif'; c.fillStyle='#8e9db3'; c.strokeStyle='#243044'; c.lineWidth=1;
+  const ystep = (ymax-ymin)>120?50:25;
+  for(let y=Math.ceil(ymin/ystep)*ystep;y<=ymax;y+=ystep){
+    c.beginPath();c.moveTo(padL,sy(y));c.lineTo(w-padR,sy(y));c.stroke();
+    c.textAlign='right';c.fillText(y+'%',padL-6,sy(y)+4);
+  }
+  c.textAlign='center';
+  for(let x=0;x<=50;x+=10){ c.fillText(x===0?'0%':'−'+x+'%',sx(x/100),h-padB+16); }
+  c.fillText('科技股跌幅',(padL+w-padR)/2,h-4);
+  c.strokeStyle='#4a5a74'; c.beginPath(); c.moveTo(padL,sy(0)); c.lineTo(w-padR,sy(0)); c.stroke();
+  const line=(key,color,wd)=>{c.strokeStyle=color;c.lineWidth=wd;c.beginPath();pts.forEach((p,i)=>{const X=sx(p.x),Y=sy(p[key]);i?c.lineTo(X,Y):c.moveTo(X,Y);});c.stroke();};
+  line('b','#7a8aa3',1.6); line('a','#4da3ff',2.6);
+  if(m.callDrop!==null && m.callDrop>0 && m.callDrop<=0.5){
+    c.setLineDash([5,4]);c.strokeStyle='#ff8a3d';c.lineWidth=1.5;
+    c.beginPath();c.moveTo(sx(m.callDrop),padT);c.lineTo(sx(m.callDrop),h-padB);c.stroke();c.setLineDash([]);
+    c.fillStyle='#ff8a3d';c.textAlign=m.callDrop>0.35?'right':'left';
+    c.fillText('追繳點 −'+(m.callDrop*100).toFixed(1)+'%',sx(m.callDrop)+(m.callDrop>0.35?-5:5),padT+12);
+  }
+  const cur=scenario(S,S.shock/100);
+  const cy=Math.max(ymin,cur.plPct*100);
+  c.fillStyle='#fff';c.beginPath();c.arc(sx(S.shock/100),sy(cy),5,0,7);c.fill();
+  c.strokeStyle='#4da3ff';c.lineWidth=2;c.stroke();
+}
+
+function copySummary(){
+  const L=window._last; if(!L){toast('尚無結果');return;}
+  const {m,sc,r,fN}=L;
+  const t=[
+    '【台股持倉風險評估】',
+    `風險分數：${Math.round(sc.total)}/100（等級 ${sc.grade.k}｜${sc.grade.t}）`,
+    `科技股 ${fmt(S.tech)} 萬（融資 ${fmt(S.loan)} 萬）／指數型ETF ${fmt(S.etf)} 萬／其他 ${fmt(S.oth)} 萬／金融股 ${fmt(S.fin)} 萬／現金 ${fmt(S.cash)} 萬`,
+    `避險：期貨名目 ${fmt(fN)} 萬、權證／選擇權有效名目 ${fmt(optNotional(S))} 萬（覆蓋率 ${pctf(m.hedgeCover,0)}）`,
+    `淨值 ${fmt(m.eq0)} 萬，維持率 ${S.loan>0?pctf(m.ratio0,0):'無融資'}，距追繳 ${m.callDrop!==null?(m.callDrop<=0?'已觸及':'−'+pctf(m.callDrop)):'—'}`,
+    `科技股 −${S.shock}% 時：淨值 ${signed(r.plPct*100,1)}%，狀態 ${STATUS_TXT(r.status,S.loan)}`
+  ].join('\n');
+  const done=()=>toast('已複製到剪貼簿');
+  if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(t).then(done,()=>fallback(t,done));}else fallback(t,done);
+}
+function fallback(t,cb){const a=document.createElement('textarea');a.value=t;document.body.appendChild(a);a.select();try{document.execCommand('copy');cb();}catch(e){toast('複製失敗');}a.remove();}
+
+(function init(){
+  try{
+    const saved=JSON.parse(localStorage.getItem('twRiskState2')||'null');
+    if(saved&&typeof saved==='object'){ for(const k in DEFAULTS){ if(typeof saved[k]===typeof DEFAULTS[k]) S[k]=saved[k]; } }
+  }catch(e){}
+  buildInputs(); syncInputs(); updateEst(); render();
+  let t; window.addEventListener('resize',()=>{clearTimeout(t);t=setTimeout(render,120);});
+})();
+</script>
+</body>
+</html>
